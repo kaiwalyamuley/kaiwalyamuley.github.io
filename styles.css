@@ -253,6 +253,31 @@ h3 { font-size: 1.15rem; font-weight: 650; letter-spacing: -0.01em; line-height:
 .mock-code code { font-family: inherit; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mock-code .k { color: #fff; font-weight: 700; }
 .mock-code .s { color: var(--pos); }
+.mock-attendance { padding: 14px 16px; display: grid; gap: 8px; }
+.att-head, .att-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 0.72rem; color: var(--muted); }
+.att-pill { border: 1px solid var(--line-2); border-radius: 99px; padding: 2px 8px; text-transform: uppercase; letter-spacing: .1em; font-size: 0.62rem; }
+.att-row { display: grid; grid-template-columns: 1fr repeat(5, 22px) 40px; gap: 5px; align-items: center; padding: 6px 0; border-top: 1px solid var(--line); }
+.att-row i { font-style: normal; font-size: 0.68rem; font-weight: 700; text-align: center; line-height: 22px; border-radius: 6px; }
+.att-row i.p { background: rgba(126,226,168,.12); color: var(--pos); }
+.att-row i.a { background: rgba(255,143,143,.14); color: var(--neg); }
+.att-row i.l { background: rgba(255,255,255,.08); color: #cfcfcf; }
+.att-row b { text-align: right; font-variant-numeric: tabular-nums; }
+.att-foot { border-top: 1px solid var(--line); padding-top: 8px; }
+.att-wa { color: var(--text); font-weight: 600; }
+.att-row span, .att-foot span { white-space: nowrap; }
+@media (max-width: 480px) {
+  .work-visual { padding: 14px; }
+  .mock-attendance { padding: 12px; }
+  .att-row { grid-template-columns: 1fr repeat(5, 18px) 32px; gap: 4px; font-size: 0.78rem; }
+  .att-row i { line-height: 18px; font-size: 0.6rem; }
+  .att-head span:first-child { font-size: 0.66rem; }
+  .att-foot { font-size: 0.66rem; }
+}
+.work-link {
+  display: inline-block; margin-top: 22px; font-size: 0.72rem; font-weight: 600; letter-spacing: .16em; text-transform: uppercase;
+  border-bottom: 1px solid var(--line-2); padding-bottom: 4px; transition: border-color .2s;
+}
+.work-link:hover { border-color: var(--text); }
 .tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
 .tags li { padding: 5px 12px; border-radius: 99px; border: 1px solid var(--line-2); font-size: 0.75rem; color: var(--muted); }
 
