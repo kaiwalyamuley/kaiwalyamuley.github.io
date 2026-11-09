@@ -196,6 +196,17 @@ input[type=file] { padding: 8px; }
 .foot { display: flex; flex-wrap: wrap; align-items: center; gap: 18px; padding: 26px var(--gutter); border-top: 1px solid var(--line); }
 .foot img { height: 54px; width: auto; }
 
+.foot-link { color: var(--muted); font-size: 14px; text-decoration: underline; }
+.legal { max-width: 720px; margin: 0 auto; padding: 32px 16px 64px; }
+.legal-logo { width: 150px; margin-bottom: 26px; }
+.legal h1 { font-size: clamp(40px, 7vw, 64px); }
+.legal h2 { font-size: 28px; margin: 34px 0 10px; }
+.legal p { margin-top: 12px; }
+.legal ul { padding-left: 20px; margin: 12px 0; }
+.legal li { margin-top: 8px; }
+.legal p a:not(.btn) { color: var(--orange); text-decoration: underline; }
+.legal .btn { margin-top: 18px; }
+
 /* ---------- motion ---------- */
 .rv { opacity: 0; translate: 0 26px; transition: opacity .65s cubic-bezier(.2, .7, .2, 1) var(--d, 0s), translate .65s cubic-bezier(.2, .7, .2, 1) var(--d, 0s), transform .18s ease-out, border-color .2s, box-shadow .25s; }
 .rv.in { opacity: 1; translate: 0 0; }

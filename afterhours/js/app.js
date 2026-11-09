@@ -87,6 +87,7 @@ function drawFooter() {
   document.getElementById("footer").innerHTML = `<div class="foot">
     <img src="assets/brand/logo-small.webp" alt="AfterHours Streetwear Co.">
     <p class="mono muted">Every tee is printed after you order it.</p>
+    <a class="foot-link" href="privacy.html">Privacy Policy</a>
     ${INSTAGRAM_URL ? `<a class="btn small" href="${esc(INSTAGRAM_URL)}" target="_blank" rel="noopener">Instagram</a>` : ""}
   </div>`;
 }
