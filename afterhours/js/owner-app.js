@@ -2,8 +2,9 @@
 // the database enforces that, and this gate explains it.
 import { api, DEMO } from "./api.js";
 import { esc, toast, GOOGLE_ICON } from "./ui.js";
-import { renderOwner, pendingCount } from "./owner.js";
+import { renderOwner, pendingCount, consoleTabs } from "./owner.js";
 import { pageSwap, markLogin, consumeLogin, playLogin } from "./motion.js";
+import { mountSide, unmountSide, drawSide, sideToggle } from "./side.js";
 
 const app = document.getElementById("app");
 const nav = document.getElementById("nav");
@@ -11,14 +12,17 @@ const store = { profile: null, products: [], settings: { shipping_inr: 79, free_
 let polling;
 
 async function refresh() {
-  [store.products, store.settings, store.ownerPending] = await Promise.all([api.products(), api.settings(), store.profile.access.orders ? pendingCount() : 0]);
+  const { orders } = store.profile.access;
+  let messages;
+  [store.products, store.settings, store.ownerPending, messages] = await Promise.all([api.products(), api.settings(), orders ? pendingCount() : 0, orders ? api.messages() : []]);
+  store.openHelp = messages.filter((m) => m.status === "open").length;
 }
 
 const hasStaffAccess = ({ owner, orders, products, settings }) => owner || orders || products || settings;
 
 function drawNav() {
   nav.innerHTML = `<nav class="nav">
-    <a class="brand" href="#/orders" aria-label="Owner console"><img src="assets/brand/logo-small.webp" alt="AfterHours"></a>
+    <div class="nav-left">${sideToggle()}<a class="brand" href="#/" aria-label="Owner console"><img src="assets/brand/logo-small.webp" alt="AfterHours"></a></div>
     <div class="links">
       <span class="mono owner-chip">${store.profile.access.owner ? "Owner" : "Co-owner"}${store.ownerPending ? `<b class="pill">${store.ownerPending}</b>` : ""}</span>
       <a href="index.html" target="_blank" rel="noopener">View store</a>
@@ -26,10 +30,25 @@ function drawNav() {
     </div>
   </nav>`;
   document.getElementById("sign-out").addEventListener("click", () => api.signOut());
+  const { access, full_name: name, email } = store.profile;
+  const tabs = consoleTabs(access);
+  const badges = { orders: store.ownerPending, help: store.openHelp, products: store.products.length };
+  const info = access.orders ? [{ label: "Waiting for you", value: `${store.ownerPending} order${store.ownerPending === 1 ? "" : "s"}` }, { label: "Open messages", value: String(store.openHelp) }] : [];
+  drawSide({
+    account: { name, email, tag: access.owner ? "Owner" : "Co-owner" },
+    links: [
+      ...tabs.map(([key, label, , icon]) => ({ href: `#/${key}`, label, icon, badge: badges[key] || "" })),
+      { href: "index.html", label: "View store", icon: "store", external: true },
+    ],
+    info,
+    signOut: () => api.signOut(),
+    fallbackHref: `#/${tabs[0][0]}`,
+  });
 }
 
 function gate() {
   nav.innerHTML = "";
+  unmountSide();
   clearInterval(polling);
   app.innerHTML = `<section class="gate">
     <div class="gate-grid" aria-hidden="true"></div>
@@ -62,6 +81,7 @@ function gate() {
 
 function denied() {
   nav.innerHTML = "";
+  unmountSide();
   clearInterval(polling);
   app.innerHTML = `<section class="gate">
     <div class="gate-grid red" aria-hidden="true"></div>
@@ -124,6 +144,7 @@ async function show() {
   if (justSignedIn) playLogin({ name: store.profile.full_name || store.profile.email, owner: true, title: store.profile.access.owner ? "OWNER ACCESS" : "CO-OWNER ACCESS" });
   if (started) return;
   started = true;
+  mountSide("owner", true);
   await refresh();
   await route();
   watchOrders();

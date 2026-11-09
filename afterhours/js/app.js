@@ -1,10 +1,11 @@
 import { api, DEMO } from "./api.js";
-import { INSTAGRAM_URL } from "./config.js";
-import { esc, money, when, toast, openModal, tee, STATUS, GOOGLE_ICON } from "./ui.js";
-import { pageSwap, reveal, bindTilt, flyToBag, markLogin, consumeLogin, playLogin } from "./motion.js";
+import { esc, money, when, toast, openModal, pickReason, tee, STATUS, GOOGLE_ICON } from "./ui.js";
+import { pageSwap, reveal, bindTilt, flyToBag, markLogin, consumeLogin, playLogin, playOrderPlaced } from "./motion.js";
+import { mountSide, drawSide, sideToggle } from "./side.js";
+import { CUSTOMER_REASONS, SUPPORT_TOPICS } from "./reasons.js";
 
 const app = document.getElementById("app");
-const store = { profile: null, products: [], settings: { shipping_inr: 79, free_shipping_over: 1499 } };
+const store = { profile: null, products: [], settings: { shipping_inr: 79, free_shipping_over: 1499 }, activeOrders: 0 };
 const INDIAN_MOBILE = /^[6-9][0-9]{9}$/;
 
 /* ---------- bag ---------- */
@@ -66,10 +67,10 @@ const firstName = () => (store.profile?.full_name || store.profile?.email || "th
 function drawNav() {
   const signedIn = Boolean(store.profile);
   document.getElementById("nav").innerHTML = `<nav class="nav">
-    <a class="brand" href="#/" aria-label="AfterHours home"><img src="assets/brand/logo-small.webp" alt="AfterHours"></a>
+    <div class="nav-left">${sideToggle()}<a class="brand" href="#/" aria-label="AfterHours home"><img src="assets/brand/logo-small.webp" alt="AfterHours"></a></div>
     <div class="links">
       <a href="#/shop">Shop</a>
-      ${signedIn ? '<a href="#/orders">Orders</a>' : ""}
+      <a class="nav-help" href="#/help">Help</a>
       <a class="bag-link" href="#/bag">Bag<b class="pill">${bagCount()}</b></a>
       ${signedIn
         ? `<button class="link" id="sign-out">Sign out</button>`
@@ -77,20 +78,66 @@ function drawNav() {
     </div>
   </nav>`;
   document.getElementById("sign-in")?.addEventListener("click", () => signInModal());
-  document.getElementById("sign-out")?.addEventListener("click", async () => {
-    await api.signOut();
-    location.hash = "#/";
+  document.getElementById("sign-out")?.addEventListener("click", leave);
+  drawCustomerSide();
+}
+
+async function leave() {
+  await api.signOut();
+  location.hash = "#/";
+}
+
+const shippingText = () => {
+  const { shipping_inr: fee, free_shipping_over: free } = store.settings;
+  return fee ? `${money(fee)}, free over ${money(free)}` : "Free";
+};
+
+function drawCustomerSide() {
+  const s = store.settings;
+  const info = [{ label: "Payment", value: "Cash on delivery" }, { label: "Shipping", value: shippingText() }];
+  if (s.support_phone) info.push({ label: "Helpline", value: s.support_phone, href: `tel:${s.support_phone.replace(/\s/g, "")}` });
+  if (s.support_hours) info.push({ label: "Support hours", value: s.support_hours });
+  drawSide({
+    account: store.profile && { name: store.profile.full_name, email: store.profile.email, tag: store.profile.email },
+    links: [
+      { href: "#/", label: "Home", icon: "home" },
+      { href: "#/shop", label: "Shop all graphics", icon: "shop" },
+      { href: "#/bag", label: "My bag", icon: "bag", badge: bagCount() || "" },
+      { href: "#/orders", label: "My orders", icon: "orders", badge: store.activeOrders || "" },
+      { href: "#/help", label: "Help and contact", icon: "help" },
+      { href: "privacy.html", label: "Privacy policy", icon: "shield" },
+    ],
+    info,
+    signIn: () => signInModal(),
+    signOut: leave,
   });
 }
 
 function drawFooter() {
+  const s = store.settings;
   document.getElementById("footer").innerHTML = `<div class="foot">
     <img src="assets/brand/logo-small.webp" alt="AfterHours Streetwear Co.">
-    <p class="mono muted">Every tee is printed after you order it.</p>
-    <a class="foot-link" href="privacy.html">Privacy Policy</a>
-    ${INSTAGRAM_URL ? `<a class="btn small" href="${esc(INSTAGRAM_URL)}" target="_blank" rel="noopener">Instagram</a>` : ""}
+    <div class="foot-text">
+      <p class="mono muted">Every tee is printed after you order it.</p>
+      ${s.business_address ? `<p class="muted small">AfterHours Streetwear Co., ${esc(s.business_address)}</p>` : ""}
+    </div>
+    <nav class="foot-links" aria-label="Footer">
+      <a class="foot-link" href="#/help">Help and contact</a>
+      <a class="foot-link" href="privacy.html">Privacy Policy</a>
+      ${s.instagram_url ? `<a class="foot-link" href="${esc(s.instagram_url)}" target="_blank" rel="noopener">Instagram</a>` : ""}
+    </nav>
   </div>`;
 }
+
+const TRUST = [
+  ["Pay when it arrives", "Cash on delivery. No card or UPI needed to order."],
+  ["Printed just for you", "Your tee goes to print after your order is accepted."],
+  ["Cancel before we accept", "Changed your mind? Cancel from your orders page."],
+  ["Follow every step", "See it move from accepted to printing to delivered."],
+  ["Safe Google sign-in", "We never see or store your Google password."],
+];
+
+const trustStrip = () => `<section class="trust" aria-label="Why shop with AfterHours">${TRUST.map(([title, text]) => `<div><strong>${title}</strong><span class="muted">${text}</span></div>`).join("")}</section>`;
 
 /* ---------- catalogue pieces ---------- */
 function card(p) {
@@ -191,6 +238,7 @@ async function pageHome() {
   const marquee = Array(8).fill("PRINTED TO ORDER ✦ AFTER DARK ONLY ✦ ").join("");
   app.innerHTML = `${hero()}<div id="strip"></div>
     <div class="marquee mono" aria-hidden="true"><div>${marquee}</div></div>
+    ${trustStrip()}
     <section class="section"><div class="head"><span class="mono kicker">Drop 01</span><h2>The first ten.</h2><a class="more" href="#/shop">See all</a></div>${grid(featured)}</section>
     ${pre.length ? `<section class="section"><div class="head"><span class="mono kicker">Pre-Launch</span><h2>Early-access graphics.</h2><a class="more" href="#/shop">See all</a></div>${grid(pre)}</section>` : ""}
     ${lookbook()}${pricing()}${howItWorks()}`;
@@ -233,7 +281,12 @@ function pageProduct(slug) {
       <div class="sizes">${p.sizes.map((s, i) => `<button class="size ${i === 1 ? "on" : ""}" data-s="${esc(s)}">${esc(s)}</button>`).join("")}</div>
       <div class="row"><button class="btn primary" id="add">Add to bag</button><button class="btn" id="buy">Buy now</button></div>`
       : `<p class="notice mono">Coming soon</p>`}
-      <p class="mono muted small">Printed to order on a black tee.</p>
+      <ul class="assure">
+        <li>Printed to order on a black tee</li>
+        <li>Pay cash when it arrives (${esc(shippingText())} shipping)</li>
+        ${store.settings.delivery_note ? `<li>${esc(store.settings.delivery_note)}</li>` : ""}
+        <li>Questions? <a href="#/help">Contact us</a></li>
+      </ul>
     </div>
   </section>`;
   const stage = document.getElementById("stage");
@@ -315,7 +368,11 @@ async function pageCheckout() {
     <aside class="panel">
       ${lines.map((l) => `<p class="row-between"><span>${esc(l.product.name)} · ${esc(l.size)} × ${l.quantity}</span><span>${money(l.quantity * l.product.price_inr)}</span></p>`).join("")}
       ${summary(lines)}
-      <p class="muted small">The final total is confirmed when your order is placed.</p>
+      <ul class="assure">
+        <li>Nothing to pay now. Pay cash when it arrives.</li>
+        <li>You can cancel until we accept your order.</li>
+        <li>Your details are only used to deliver this order. <a href="privacy.html">Privacy policy</a></li>
+      </ul>
     </aside>
   </section>`;
   const form = document.getElementById("checkout");
@@ -342,7 +399,7 @@ async function pageCheckout() {
       );
       bag = [];
       writeBag();
-      toast(`Order ${result.order_no} placed`);
+      playOrderPlaced({ orderNo: result.order_no, total: result.total_inr });
       location.hash = "#/orders";
     } catch (error) {
       fail(error.message);
@@ -374,18 +431,89 @@ async function pageOrders() {
       ${o.order_items.map((i) => `<p class="row-between"><span>${esc(i.name)} · ${esc(i.size)} × ${i.quantity}</span><span>${money(i.unit_price_inr * i.quantity)}</span></p>`).join("")}
       <p class="row-between total"><span>Total, cash on delivery</span><strong>${money(o.total_inr)}</strong></p>
       ${o.tracking_no ? `<p class="mono small">Tracking: ${esc(o.tracking_no)}</p>` : ""}
+      ${o.cancel_reason ? `<p class="reason-note">Reason: ${esc(o.cancel_reason)}</p>` : ""}
       ${o.status === "pending" ? `<button class="btn small" data-cancel="${esc(o.id)}">Cancel order</button>` : ""}
     </article>`).join("")}</div></section>`;
+  reveal(app);
   app.querySelectorAll("[data-cancel]").forEach((b) => b.addEventListener("click", async () => {
-    if (!confirm("Cancel this order?")) return;
+    const reason = await pickReason("Why are you cancelling?", "Tap a reason and your order will be cancelled.", CUSTOMER_REASONS);
+    if (!reason) return;
     try {
-      await api.cancelOrder(b.dataset.cancel);
+      await api.cancelOrder(b.dataset.cancel, reason);
       toast("Order cancelled");
+      await updateActiveOrders();
+      drawNav();
       pageOrders();
     } catch (error) {
       toast(error.message, "bad");
     }
   }));
+}
+
+function faq() {
+  const s = store.settings;
+  const items = [
+    ["How do I pay?", "Cash on delivery. You pay the delivery partner when your tee arrives, and there is nothing to pay online."],
+    ["When is my tee printed?", "Each tee is printed after we accept your order, so it is made just for you."],
+    ["Can I cancel my order?", `Yes, from your orders page, until we accept it. After that printing begins${s.support_phone || s.support_email ? ", so please contact us quickly" : ""}.`],
+    ["How do I follow my order?", "Sign in and open My orders. You will see each stage, and a tracking number once it is dispatched."],
+    ["What does shipping cost?", `${shippingText()}.`],
+    ["Why do I sign in with Google?", "So only you can see your orders. We receive your name, email and profile picture, and never your Google password."],
+  ];
+  if (s.delivery_note) items.splice(2, 0, ["How long does delivery take?", s.delivery_note]);
+  if (s.return_policy) items.push(["What is your return and exchange policy?", s.return_policy]);
+  return items.map(([q, a]) => `<details class="faq"><summary>${esc(q)}</summary><p class="muted">${esc(a)}</p></details>`).join("");
+}
+
+async function pageHelp() {
+  const s = store.settings;
+  const digits = (s.support_phone || "").replace(/\D/g, "").slice(-10);
+  const ways = [
+    digits && ["Call us", s.support_phone, `tel:+91${digits}`],
+    digits && ["WhatsApp", "Message us on WhatsApp", `https://wa.me/91${digits}`],
+    s.support_email && ["Email", s.support_email, `mailto:${s.support_email}`],
+    s.instagram_url && ["Instagram", "Message our page", s.instagram_url],
+  ].filter(Boolean);
+  const formOrPrompt = store.profile
+    ? `<form id="help-form" class="form">
+        <label class="field"><span>What do you need help with?</span><select name="topic" required><option value="">Choose a topic</option>${SUPPORT_TOPICS.map((t) => `<option>${esc(t)}</option>`).join("")}</select></label>
+        <label class="field"><span>Order number (optional)</span><input name="orderNo" maxlength="20" placeholder="AH-1001"></label>
+        <label class="field"><span>Mobile number (optional)</span><input name="phone" inputmode="tel" autocomplete="tel" placeholder="So we can call you back"></label>
+        <label class="field"><span>Your message</span><textarea name="message" rows="4" required minlength="5" maxlength="1000"></textarea></label>
+        <p class="muted small">We'll reply to ${esc(store.profile.email)}${digits ? " or by phone" : ""}.</p>
+        <p class="error" id="help-error" hidden></p>
+        <button class="btn primary wide" id="help-send">Send message</button>
+      </form>`
+    : `<p class="muted">Sign in so we can link your message to your account and reply to you.</p><button class="btn primary" id="help-signin">Sign in to message us</button>`;
+  app.innerHTML = `<section class="section first">
+    <div class="head"><span class="mono kicker">Helpline</span><h2>We're here to help.</h2></div>
+    ${s.support_hours ? `<p class="lead">Support hours: ${esc(s.support_hours)}</p>` : ""}
+    ${ways.length ? `<div class="ways">${ways.map(([title, value, href]) => `<a class="way panel" href="${esc(href)}" ${href.startsWith("http") ? 'target="_blank" rel="noopener"' : ""}><span class="mono muted">${esc(title)}</span><strong>${esc(value)}</strong></a>`).join("")}</div>` : ""}
+    <div class="two help-grid">
+      <div class="panel"><div class="head"><h3>Send us a message</h3></div>${formOrPrompt}</div>
+      <div><div class="head"><h3>Common questions</h3></div>${faq()}</div>
+    </div>
+    ${s.business_address ? `<div class="panel seller"><span class="mono muted">Seller details</span><p><strong>AfterHours Streetwear Co.</strong><br>${esc(s.business_address)}</p></div>` : ""}
+  </section>`;
+  document.getElementById("help-signin")?.addEventListener("click", () => signInModal("Sign in to send us a message."));
+  const form = document.getElementById("help-form");
+  form?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(form));
+    const box = document.getElementById("help-error");
+    const button = document.getElementById("help-send");
+    box.hidden = true;
+    button.disabled = true;
+    try {
+      await api.sendMessage(values);
+      form.reset();
+      toast("Message sent. We'll get back to you.");
+    } catch (error) {
+      box.textContent = error.message;
+      box.hidden = false;
+    }
+    button.disabled = false;
+  });
 }
 
 function notFound() {
@@ -404,12 +532,23 @@ async function route() {
       else if (page === "bag") pageBag();
       else if (page === "checkout") await pageCheckout();
       else if (page === "orders") await pageOrders();
+      else if (page === "help") await pageHelp();
       else notFound();
     } catch (error) {
       app.innerHTML = `<section class="section first empty"><h2>Something went wrong.</h2><p class="muted">${esc(error.message)}</p></section>`;
     }
   });
+  await updateActiveOrders();
   drawNav();
+}
+
+async function updateActiveOrders() {
+  if (!store.profile) {
+    store.activeOrders = 0;
+    return;
+  }
+  const orders = await api.myOrders(store.profile.id).catch(() => []);
+  store.activeOrders = orders.filter((o) => ["pending", "accepted", "printing", "dispatched"].includes(o.status)).length;
 }
 
 async function refresh() {
@@ -424,6 +563,7 @@ async function boot() {
   document.getElementById("demo-bar").hidden = !DEMO;
   store.profile = await api.currentProfile();
   await refresh();
+  mountSide("store", false);
   drawFooter();
   bindTilt(app);
   api.onAuthChange(async () => {

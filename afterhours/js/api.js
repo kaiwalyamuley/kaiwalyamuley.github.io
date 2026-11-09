@@ -71,14 +71,26 @@ async function liveApi() {
     async myOrders(userId) {
       return unwrap(await db.from("orders").select(orderSelect).eq("user_id", userId).order("created_at", { ascending: false }));
     },
-    async cancelOrder(id) {
-      unwrap(await db.rpc("cancel_my_order", { p_order_id: id }));
+    async cancelOrder(id, reason) {
+      unwrap(await db.rpc("cancel_my_order", { p_order_id: id, p_reason: reason }));
+    },
+    async sendMessage({ topic, message, phone, orderNo }) {
+      unwrap(await db.rpc("send_support_message", { p_topic: topic, p_message: message, p_phone: phone, p_order_no: orderNo }));
+    },
+    async messages() {
+      return unwrap(await db.from("support_messages").select("*").order("created_at", { ascending: false }).limit(200));
+    },
+    async resolveMessage(id) {
+      unwrap(await db.from("support_messages").update({ status: "resolved" }).eq("id", id));
+    },
+    async deleteProduct(id) {
+      unwrap(await db.from("products").delete().eq("id", id));
     },
     async allOrders() {
       return unwrap(await db.from("orders").select(orderSelect).order("created_at", { ascending: false }).limit(300));
     },
-    async updateOrder(id, status, tracking, note) {
-      unwrap(await db.rpc("owner_update_order", { p_order_id: id, p_status: status, p_tracking: tracking ?? null, p_note: note ?? null }));
+    async updateOrder(id, status, tracking, note, reason) {
+      unwrap(await db.rpc("owner_update_order", { p_order_id: id, p_status: status, p_tracking: tracking ?? null, p_note: note ?? null, p_reason: reason ?? null }));
     },
     async saveProduct({ id, ...values }) {
       values.updated_at = new Date().toISOString();

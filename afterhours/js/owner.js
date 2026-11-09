@@ -1,5 +1,6 @@
 import { api } from "./api.js";
-import { esc, money, when, toast, openModal, tee, STATUS } from "./ui.js";
+import { esc, money, when, toast, openModal, pickReason, tee, STATUS } from "./ui.js";
+import { OWNER_REASONS } from "./reasons.js";
 import { countUp } from "./motion.js";
 
 export async function pendingCount() {
@@ -42,6 +43,7 @@ function orderCard(order) {
       <p class="contact"><a href="tel:+91${digits}">+91 ${digits}</a> <a href="https://wa.me/91${digits}" target="_blank" rel="noopener">WhatsApp</a></p>
       ${order.customer_note ? `<p class="muted">Note: ${esc(order.customer_note)}</p>` : ""}
       ${order.tracking_no ? `<p class="mono small">Tracking: ${esc(order.tracking_no)}</p>` : ""}
+      ${order.cancel_reason ? `<p class="reason-note">${order.status === "cancelled" ? "Customer's reason" : "Declined"}: ${esc(order.cancel_reason)}</p>` : ""}
     </div>
     <p class="row-between total"><span>Cash on delivery</span><strong>${money(order.total_inr)}</strong></p>
     <div class="row">${(NEXT[order.status] || []).map(([status, label, kind]) => `<button class="btn small ${kind}" data-order="${esc(order.id)}" data-status="${status}">${label}</button>`).join("")}</div>
@@ -78,10 +80,13 @@ function drawOrders(body, orders, ctx) {
   body.querySelector("#reload").addEventListener("click", ctx.redraw);
   body.querySelectorAll("[data-order]").forEach((b) => b.addEventListener("click", async () => {
     const status = b.dataset.status;
-    if (status === "rejected" && !confirm("Decline this order? The customer will see it as declined.")) return;
+    const reason = status === "rejected"
+      ? await pickReason("Why are you declining?", "Tap a reason and the order will be declined. The customer will see it.", OWNER_REASONS)
+      : null;
+    if (status === "rejected" && !reason) return;
     const tracking = status === "dispatched" ? await askTracking() : null;
     try {
-      await api.updateOrder(b.dataset.order, status, tracking);
+      await api.updateOrder(b.dataset.order, status, tracking, null, reason);
       toast(`Order ${STATUS[status].label.toLowerCase()}`);
       await ctx.refresh();
       await ctx.redraw();
@@ -182,7 +187,7 @@ function drawProducts(body, ctx) {
     <div class="grow"><h3>${esc(p.name)}</h3><p class="mono muted">${esc(p.collection)}</p></div>
     <label class="inline"><span class="sr">Price of ${esc(p.name)}</span>₹<input class="price-input" type="number" min="1" step="1" value="${p.price_inr}"></label>
     <select class="status-input" aria-label="Visibility of ${esc(p.name)}">${[["live", "Live"], ["coming_soon", "Coming soon"], ["hidden", "Hidden"]].map(([v, l]) => `<option value="${v}" ${p.status === v ? "selected" : ""}>${l}</option>`).join("")}</select>
-    <button class="btn small edit">Edit</button>
+    <div class="row-actions"><button class="btn small edit">Edit</button>${ctx.store.profile.access.owner ? '<button class="btn small danger delete">Delete</button>' : ""}</div>
   </div>`).join("")}</div>`;
   body.querySelector("#new").addEventListener("click", () => productForm(null, ctx));
   body.querySelectorAll(".prow").forEach((row) => {
@@ -197,6 +202,17 @@ function drawProducts(body, ctx) {
       }
     };
     row.querySelector(".edit").addEventListener("click", () => productForm(product, ctx));
+    row.querySelector(".delete")?.addEventListener("click", async () => {
+      if (!confirm(`Delete ${product.name} permanently? It will disappear from the shop. Past orders keep their details. This cannot be undone.`)) return;
+      try {
+        await api.deleteProduct(product.id);
+        toast(`${product.name} deleted`);
+        await ctx.refresh();
+        await ctx.redraw();
+      } catch (error) {
+        toast(error.message, "bad");
+      }
+    });
     row.querySelector(".price-input").addEventListener("change", (event) => {
       const price = Number(event.target.value);
       if (!Number.isInteger(price) || price < 1) {
@@ -210,18 +226,45 @@ function drawProducts(body, ctx) {
 }
 
 function drawSettings(body, ctx) {
-  const { shipping_inr: fee, free_shipping_over: free } = ctx.store.settings;
-  body.innerHTML = `<form id="settings" class="panel form narrow">
-    <label class="field"><span>Shipping fee (₹)</span><input name="fee" type="number" min="0" step="1" required value="${fee}"></label>
-    <label class="field"><span>Free shipping over (₹)</span><input name="free" type="number" min="0" step="1" required value="${free}"></label>
-    <button class="btn primary wide">Save shipping</button></form>`;
+  const s = ctx.store.settings;
+  const text = (name, label, hint = "") => `<label class="field"><span>${label}</span><input name="${name}" value="${esc(s[name] || "")}" placeholder="${esc(hint)}"></label>`;
+  body.innerHTML = `<form id="settings" class="panel form store-form">
+    <h3>Shipping</h3>
+    <div class="cols">
+      <label class="field"><span>Shipping fee (₹)</span><input name="shipping_inr" type="number" min="0" step="1" required value="${s.shipping_inr}"></label>
+      <label class="field"><span>Free shipping over (₹)</span><input name="free_shipping_over" type="number" min="0" step="1" required value="${s.free_shipping_over}"></label>
+    </div>
+    ${text("delivery_note", "Delivery time, shown to customers", "Example: Delivered in 5 to 7 working days")}
+    <h3>Helpline</h3>
+    <p class="muted small">These appear publicly on the Help page and side menu. Blank items stay hidden.</p>
+    <div class="cols">${text("support_phone", "Helpline and WhatsApp number", "10-digit mobile number")}${text("support_email", "Support email", "help@yourbrand.com")}</div>
+    <div class="cols">${text("support_hours", "Support hours", "Example: Mon to Sat, 10 am to 7 pm")}${text("instagram_url", "Instagram link", "https://instagram.com/yourpage")}</div>
+    <h3>Trust details</h3>
+    <label class="field"><span>Business address</span><textarea name="business_address" rows="2" maxlength="300" placeholder="Shown as seller details on the Help page and footer">${esc(s.business_address || "")}</textarea></label>
+    <label class="field"><span>Return and exchange policy</span><textarea name="return_policy" rows="4" maxlength="1200" placeholder="Example: Damaged or wrongly printed tees are replaced if you contact us within 3 days of delivery.">${esc(s.return_policy || "")}</textarea></label>
+    <p class="error" id="settings-error" hidden></p>
+    <button class="btn primary wide">Save store info</button></form>`;
   body.querySelector("#settings").addEventListener("submit", async (event) => {
     event.preventDefault();
-    const data = new FormData(event.target);
+    const data = Object.fromEntries(new FormData(event.target));
+    const box = body.querySelector("#settings-error");
+    box.hidden = true;
+    if (data.instagram_url && !data.instagram_url.startsWith("https://")) {
+      box.textContent = "The Instagram link must start with https://";
+      box.hidden = false;
+      return;
+    }
+    if (data.support_phone && !/^(\+?91)?[6-9][0-9]{9}$/.test(data.support_phone.replace(/[\s-]/g, ""))) {
+      box.textContent = "Please enter a valid 10-digit helpline number.";
+      box.hidden = false;
+      return;
+    }
     try {
-      await api.saveSettings({ shipping_inr: Number(data.get("fee")), free_shipping_over: Number(data.get("free")) });
+      const values = Object.fromEntries(Object.entries(data).map(([key, value]) => [key, typeof value === "string" ? value.trim() : value]));
+      await api.saveSettings({ ...values, shipping_inr: Number(data.shipping_inr), free_shipping_over: Number(data.free_shipping_over) });
       await ctx.refresh();
-      toast("Shipping saved");
+      await ctx.redraw();
+      toast("Store info saved");
     } catch (error) {
       toast(error.message, "bad");
     }
@@ -231,7 +274,7 @@ function drawSettings(body, ctx) {
 const PERMISSIONS = [
   ["can_orders", "Orders", "Accept and ship orders. Can see customer names, phones and addresses."],
   ["can_products", "Products", "Add products, upload images and change prices."],
-  ["can_settings", "Shipping", "Change the shipping fee and free-shipping limit."],
+  ["can_settings", "Store info", "Change shipping, helpline details and policies."],
 ];
 
 const permissionBoxes = (member) => PERMISSIONS.map(([key, label, hint]) => `<label class="check" title="${esc(hint)}">
@@ -298,10 +341,42 @@ async function drawTeam(body, ctx) {
   });
 }
 
+async function drawHelpDesk(body, ctx) {
+  const messages = await api.messages();
+  const card = (m) => {
+    const digits = (m.phone || "").replace(/\D/g, "").slice(-10);
+    return `<article class="panel order">
+      <header class="row-between"><div><strong>${esc(m.topic)}</strong><p class="muted small">${when(m.created_at)}${m.order_no ? ` · ${esc(m.order_no)}` : ""}</p></div>
+      <span class="status ${m.status === "open" ? "pending" : "delivered"}">${m.status === "open" ? "Open" : "Resolved"}</span></header>
+      <p class="message-text">${esc(m.message)}</p>
+      <p class="contact small">${esc(m.customer_name)} · <a href="mailto:${esc(m.email)}">${esc(m.email)}</a>${digits ? ` · <a href="tel:+91${digits}">+91 ${digits}</a> <a href="https://wa.me/91${digits}" target="_blank" rel="noopener">WhatsApp</a>` : ""}</p>
+      ${m.status === "open" ? `<div class="row"><button class="btn small primary" data-resolve="${esc(m.id)}">Mark resolved</button></div>` : ""}
+    </article>`;
+  };
+  body.innerHTML = `<div class="orders">${messages.map(card).join("") || '<p class="muted">No messages yet.</p>'}</div>`;
+  body.querySelectorAll("[data-resolve]").forEach((button) => button.addEventListener("click", async () => {
+    try {
+      await api.resolveMessage(button.dataset.resolve);
+      toast("Marked as resolved");
+      await ctx.refresh();
+      await ctx.redraw();
+    } catch (error) {
+      toast(error.message, "bad");
+    }
+  }));
+}
+
+export const consoleTabs = (access) => [
+  ["orders", "Orders", access.orders, "orders"],
+  ["products", "Products", access.products, "tag"],
+  ["help", "Help desk", access.orders, "chat"],
+  ["settings", "Store info", access.settings, "settings"],
+  ["team", "Team", access.owner, "team"],
+].filter(([, , allowed]) => allowed);
+
 export async function renderOwner(app, tab, ctx) {
   const { access } = ctx.store.profile;
-  const tabs = [["orders", "Orders", access.orders], ["products", "Products", access.products], ["settings", "Shipping", access.settings], ["team", "Team", access.owner]]
-    .filter(([, , allowed]) => allowed);
+  const tabs = consoleTabs(access);
   const active = tabs.some(([key]) => key === tab) ? tab : tabs[0][0];
   const openedAt = location.hash;
   const orders = access.orders ? await api.allOrders() : [];
@@ -317,5 +392,6 @@ export async function renderOwner(app, tab, ctx) {
   if (active === "products") drawProducts(body, ctx);
   else if (active === "settings") drawSettings(body, ctx);
   else if (active === "team") await drawTeam(body, ctx);
+  else if (active === "help") await drawHelpDesk(body, ctx);
   else drawOrders(body, orders, ctx);
 }

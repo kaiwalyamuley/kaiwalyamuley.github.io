@@ -133,6 +133,35 @@ export function consumeLogin() {
   }
 }
 
+/** The full-screen celebration after an order is placed. */
+export function playOrderPlaced({ orderNo, total }) {
+  if (calm) return;
+  const colors = ["#ff6a13", "#efe6d6", "#ff9a5a"];
+  const drops = Array.from({ length: 34 }, (_, i) => {
+    const angle = (i / 34) * Math.PI * 2 + Math.random() * 0.4;
+    const reach = 26 + Math.random() * 34;
+    return `<i style="--x:${(Math.cos(angle) * reach).toFixed(1)}vmin;--y:${(Math.sin(angle) * reach).toFixed(1)}vmin;--c:${colors[i % 3]};--s:${(6 + Math.random() * 16).toFixed(0)}px;--w:${(Math.random() * 0.25).toFixed(2)}s"></i>`;
+  }).join("");
+  const screen = document.createElement("div");
+  screen.className = "punch win";
+  screen.setAttribute("aria-hidden", "true");
+  screen.innerHTML = `<div class="burst">${drops}</div>
+    <svg class="tick" viewBox="0 0 80 80"><circle cx="40" cy="40" r="34"/><path d="M24 41l11 11 21-24"/></svg>
+    <div class="punch-stamp">Order placed</div>
+    <div class="punch-card mono"><span>${esc(orderNo)}</span><b>₹${Number(total).toLocaleString("en-IN")}</b></div>
+    <p class="punch-name">Pay cash when it arrives. We'll take it from here.</p>`;
+  document.body.append(screen);
+  const finish = () => {
+    screen.classList.add("out");
+    setTimeout(() => screen.remove(), 560);
+  };
+  const timer = setTimeout(finish, 3400);
+  screen.addEventListener("click", () => {
+    clearTimeout(timer);
+    finish();
+  }, { once: true });
+}
+
 /** The full-screen punch-in played right after a successful sign-in. */
 export function playLogin({ name, owner = false, title = "OWNER ACCESS" }) {
   if (calm) return;

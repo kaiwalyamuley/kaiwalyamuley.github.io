@@ -18,11 +18,29 @@ export function toast(message, kind = "ok") {
   setTimeout(() => el.remove(), 4200);
 }
 
-export function openModal(html, onReady) {
+/** Shows one button per reason. Resolves with the reason, or null if dismissed. */
+export function pickReason(title, detail, reasons) {
+  return new Promise((resolve) => {
+    let chosen = null;
+    openModal(`<h2>${esc(title)}</h2><p class="muted">${esc(detail)}</p>
+      <div class="reasons">${reasons.map((r) => `<button class="reason-btn" data-reason="${esc(r)}">${esc(r)}</button>`).join("")}</div>`, (modal, close) => {
+      modal.querySelectorAll("[data-reason]").forEach((button) => button.addEventListener("click", () => {
+        chosen = button.dataset.reason;
+        close();
+      }));
+    }, () => resolve(chosen));
+  });
+}
+
+export function openModal(html, onReady, onClose) {
   const root = document.getElementById("modal-root");
   root.innerHTML = `<div class="modal-back"><div class="modal" role="dialog" aria-modal="true">
     <button class="modal-x" aria-label="Close" data-close>×</button>${html}</div></div>`;
-  const close = () => { root.innerHTML = ""; document.removeEventListener("keydown", onKey); };
+  const close = () => {
+    root.innerHTML = "";
+    document.removeEventListener("keydown", onKey);
+    onClose?.();
+  };
   const onKey = (e) => { if (e.key === "Escape") close(); };
   document.addEventListener("keydown", onKey);
   root.querySelector(".modal-back").addEventListener("mousedown", (e) => {
