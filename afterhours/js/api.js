@@ -6,6 +6,9 @@ const isLocal = ["localhost", "127.0.0.1"].includes(location.hostname);
 const wantsDemo = new URLSearchParams(location.search).get("demo") === "1";
 export const DEMO = isLocal && wantsDemo;
 
+const UPLOAD_TYPES = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/svg+xml": "svg" };
+const MAX_UPLOAD = 15 * 1024 * 1024;
+
 const unwrap = ({ data, error }) => {
   if (error) throw new Error(error.message);
   return data;
@@ -20,7 +23,8 @@ async function liveApi() {
   const profile = async (user) => {
     if (!user) return null;
     const row = unwrap(await db.from("profiles").select("*").eq("id", user.id).maybeSingle());
-    return row || { id: user.id, email: user.email, full_name: user.user_metadata?.full_name, role: "customer" };
+    const access = unwrap(await db.rpc("my_access"));
+    return { ...(row || { id: user.id, email: user.email, full_name: user.user_metadata?.full_name, role: "customer" }), access };
   };
   const orderSelect = "*, order_items(*)";
 
@@ -29,9 +33,15 @@ async function liveApi() {
       const { data } = await db.auth.getSession();
       return profile(data.session?.user);
     },
-    onAuthChange(handler) {
-      db.auth.onAuthStateChange((event) => {
-        if (event === "SIGNED_IN" || event === "SIGNED_OUT") handler();
+    // Supabase repeats SIGNED_IN whenever the tab regains focus, including after
+    // a file picker closes, so only a real change of account counts here.
+    async onAuthChange(handler) {
+      let known = (await db.auth.getSession()).data.session?.user?.id ?? null;
+      db.auth.onAuthStateChange((_event, session) => {
+        const id = session?.user?.id ?? null;
+        if (id === known) return;
+        known = id;
+        setTimeout(handler, 0);
       });
     },
     async signIn() {
@@ -76,10 +86,36 @@ async function liveApi() {
       else unwrap(await db.from("products").insert(values));
     },
     async upload(file, slug) {
-      const ext = (file.name.split(".").pop() || "png").toLowerCase();
+      const ext = UPLOAD_TYPES[file.type];
+      if (!ext) throw new Error(`${file.name} must be a PNG, JPG, WebP or SVG image.`);
+      if (file.size > MAX_UPLOAD) throw new Error(`${file.name} is larger than 15 MB. Please choose a smaller image.`);
+      // Reading the file first means a file the browser cannot open gets its own clear message.
+      let bytes;
+      try {
+        bytes = await file.arrayBuffer();
+      } catch {
+        throw new Error(`The browser could not open ${file.name}. Copy it to your Desktop, then choose it again.`);
+      }
+      const body = new Blob([bytes], { type: file.type });
       const path = `${slug}/${crypto.randomUUID()}.${ext}`;
-      unwrap(await db.storage.from("product-media").upload(path, file, { contentType: file.type }));
+      const send = () => db.storage.from("product-media").upload(path, body, { contentType: file.type });
+      let result = await send();
+      if (result.error?.message === "Failed to fetch") result = await send();
+      if (result.error?.message === "Failed to fetch") throw new Error(`${file.name} could not be sent. Check your connection, pause any ad blocker for this page, and try again.`);
+      unwrap(result);
       return db.storage.from("product-media").getPublicUrl(path).data.publicUrl;
+    },
+    async team() {
+      return unwrap(await db.from("co_owners").select("*").order("created_at"));
+    },
+    async addCoOwner(values) {
+      unwrap(await db.from("co_owners").insert(values));
+    },
+    async updateCoOwner(email, values) {
+      unwrap(await db.from("co_owners").update(values).eq("email", email));
+    },
+    async removeCoOwner(email) {
+      unwrap(await db.from("co_owners").delete().eq("email", email));
     },
   };
 }

@@ -134,7 +134,7 @@ export function consumeLogin() {
 }
 
 /** The full-screen punch-in played right after a successful sign-in. */
-export function playLogin({ name, owner = false }) {
+export function playLogin({ name, owner = false, title = "OWNER ACCESS" }) {
   if (calm) return;
   const time = new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false });
   const screen = document.createElement("div");
@@ -142,7 +142,7 @@ export function playLogin({ name, owner = false }) {
   screen.setAttribute("aria-hidden", "true");
   screen.innerHTML = `<div class="punch-scan"></div>
     <img class="punch-logo" src="assets/brand/logo.webp" alt="">
-    <div class="punch-card mono"><span>${owner ? "OWNER ACCESS" : "TIME CARD"}</span><b>${esc(time)}</b></div>
+    <div class="punch-card mono"><span>${owner ? esc(title) : "TIME CARD"}</span><b>${esc(time)}</b></div>
     <div class="punch-stamp">${owner ? "Access granted" : "Clocked in"}</div>
     <p class="punch-name">${esc(name)}</p>`;
   document.body.append(screen);

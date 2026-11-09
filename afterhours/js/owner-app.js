@@ -11,14 +11,16 @@ const store = { profile: null, products: [], settings: { shipping_inr: 79, free_
 let polling;
 
 async function refresh() {
-  [store.products, store.settings, store.ownerPending] = await Promise.all([api.products(), api.settings(), pendingCount()]);
+  [store.products, store.settings, store.ownerPending] = await Promise.all([api.products(), api.settings(), store.profile.access.orders ? pendingCount() : 0]);
 }
+
+const hasStaffAccess = ({ owner, orders, products, settings }) => owner || orders || products || settings;
 
 function drawNav() {
   nav.innerHTML = `<nav class="nav">
     <a class="brand" href="#/orders" aria-label="Owner console"><img src="assets/brand/logo-small.webp" alt="AfterHours"></a>
     <div class="links">
-      <span class="mono owner-chip">Owner${store.ownerPending ? `<b class="pill">${store.ownerPending}</b>` : ""}</span>
+      <span class="mono owner-chip">${store.profile.access.owner ? "Owner" : "Co-owner"}${store.ownerPending ? `<b class="pill">${store.ownerPending}</b>` : ""}</span>
       <a href="index.html" target="_blank" rel="noopener">View store</a>
       <button class="link" id="sign-out">Sign out</button>
     </div>
@@ -66,7 +68,7 @@ function denied() {
     <div class="gate-card shake">
       <img class="gate-logo" src="assets/brand/logo.webp" alt="AfterHours">
       <h1>Access denied</h1>
-      <p class="muted">${esc(store.profile.email)} is not an owner account.</p>
+      <p class="muted">${esc(store.profile.email)} does not have console access.</p>
       <button class="btn wide" id="switch">Use a different account</button>
       <a class="gate-back" href="index.html">Back to the store</a>
     </div>
@@ -75,7 +77,7 @@ function denied() {
 }
 
 async function route() {
-  const tab = (location.hash || "#/orders").split("/")[1] || "orders";
+  const tab = location.hash.split("/")[1] || "";
   await pageSwap(app, async () => {
     window.scrollTo({ top: 0, behavior: "instant" });
     try {
@@ -89,6 +91,7 @@ async function route() {
 
 function watchOrders() {
   clearInterval(polling);
+  if (!store.profile.access.orders) return;
   polling = setInterval(async () => {
     if (document.hidden || document.querySelector(".modal")) return;
     try {
@@ -114,11 +117,11 @@ async function show() {
     started = false;
     return gate();
   }
-  if (store.profile.role !== "owner") {
+  if (!hasStaffAccess(store.profile.access)) {
     started = false;
     return denied();
   }
-  if (justSignedIn) playLogin({ name: store.profile.full_name || store.profile.email, owner: true });
+  if (justSignedIn) playLogin({ name: store.profile.full_name || store.profile.email, owner: true, title: store.profile.access.owner ? "OWNER ACCESS" : "CO-OWNER ACCESS" });
   if (started) return;
   started = true;
   await refresh();

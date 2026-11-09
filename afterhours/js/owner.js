@@ -228,15 +228,87 @@ function drawSettings(body, ctx) {
   });
 }
 
+const PERMISSIONS = [
+  ["can_orders", "Orders", "Accept and ship orders. Can see customer names, phones and addresses."],
+  ["can_products", "Products", "Add products, upload images and change prices."],
+  ["can_settings", "Shipping", "Change the shipping fee and free-shipping limit."],
+];
+
+const permissionBoxes = (member) => PERMISSIONS.map(([key, label, hint]) => `<label class="check" title="${esc(hint)}">
+  <input type="checkbox" name="${key}" ${member[key] ? "checked" : ""}><span><strong>${label}</strong><small class="muted">${hint}</small></span></label>`).join("");
+
+async function drawTeam(body, ctx) {
+  const members = await api.team();
+  body.innerHTML = `<div class="team">
+    <form id="add-member" class="panel form">
+      <h3>Add a co-owner</h3>
+      <p class="muted small">Enter their Google address and choose what they can do. They sign in on this same page. Only you can manage this list.</p>
+      <label class="field"><span>Google email</span><input name="email" type="email" required autocomplete="off" placeholder="name@gmail.com"></label>
+      <div class="checks">${permissionBoxes({ can_orders: true })}</div>
+      <p class="error" id="team-error" hidden></p>
+      <button class="btn primary wide">Add co-owner</button>
+    </form>
+    <div class="stack">${members.map((m) => `<article class="panel member" data-email="${esc(m.email)}">
+      <header class="row-between"><strong class="member-email">${esc(m.email)}</strong><button class="btn small remove">Remove</button></header>
+      <div class="checks">${permissionBoxes(m)}</div>
+    </article>`).join("") || '<p class="muted">No co-owners yet.</p>'}</div>
+  </div>`;
+
+  body.querySelector("#add-member").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.target;
+    const email = form.elements.email.value.trim().toLowerCase();
+    const errorBox = body.querySelector("#team-error");
+    const fail = (message) => { errorBox.textContent = message; errorBox.hidden = false; };
+    errorBox.hidden = true;
+    if (email === ctx.store.profile.email?.toLowerCase()) return fail("That is your own account, and you already have full access.");
+    if (members.some((m) => m.email === email)) return fail("That person is already a co-owner.");
+    const permissions = Object.fromEntries(PERMISSIONS.map(([key]) => [key, form.elements[key].checked]));
+    if (!Object.values(permissions).some(Boolean)) return fail("Choose at least one area they can access.");
+    try {
+      await api.addCoOwner({ email, ...permissions });
+      toast(`${email} added`);
+      await drawTeam(body, ctx);
+    } catch (error) {
+      fail(error.message);
+    }
+  });
+
+  body.querySelectorAll(".member").forEach((card) => {
+    const { email } = card.dataset;
+    card.querySelectorAll("input[type=checkbox]").forEach((box) => box.addEventListener("change", async () => {
+      try {
+        await api.updateCoOwner(email, { [box.name]: box.checked });
+        toast("Access updated");
+      } catch (error) {
+        box.checked = !box.checked;
+        toast(error.message, "bad");
+      }
+    }));
+    card.querySelector(".remove").addEventListener("click", async () => {
+      if (!confirm(`Remove ${email}? They will lose console access straight away.`)) return;
+      try {
+        await api.removeCoOwner(email);
+        toast(`${email} removed`);
+        await drawTeam(body, ctx);
+      } catch (error) {
+        toast(error.message, "bad");
+      }
+    });
+  });
+}
+
 export async function renderOwner(app, tab, ctx) {
-  const active = tab || "orders";
+  const { access } = ctx.store.profile;
+  const tabs = [["orders", "Orders", access.orders], ["products", "Products", access.products], ["settings", "Shipping", access.settings], ["team", "Team", access.owner]]
+    .filter(([, , allowed]) => allowed);
+  const active = tabs.some(([key]) => key === tab) ? tab : tabs[0][0];
   const openedAt = location.hash;
-  const orders = await api.allOrders();
+  const orders = access.orders ? await api.allOrders() : [];
   if (location.hash !== openedAt) return;
-  const tabs =[["orders", "Orders"], ["products", "Products"], ["settings", "Shipping"]];
   app.innerHTML = `<section class="section first">
-    <div class="head"><span class="mono kicker">Owner console</span><h2>Run the shop</h2></div>
-    ${stats(orders)}
+    <div class="head"><span class="mono kicker">${access.owner ? "Owner console" : "Co-owner console"}</span><h2>Run the shop</h2></div>
+    ${access.orders ? stats(orders) : ""}
     <div class="tabs">${tabs.map(([key, label]) => `<a class="${key === active ? "on" : ""}" href="#/${key}">${label}</a>`).join("")}</div>
     <div id="owner-body"></div>
   </section>`;
@@ -244,5 +316,6 @@ export async function renderOwner(app, tab, ctx) {
   const body = document.getElementById("owner-body");
   if (active === "products") drawProducts(body, ctx);
   else if (active === "settings") drawSettings(body, ctx);
+  else if (active === "team") await drawTeam(body, ctx);
   else drawOrders(body, orders, ctx);
 }
