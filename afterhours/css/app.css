@@ -205,6 +205,31 @@ input[type=file] { padding: 8px; }
 .member { display: grid; gap: 12px; }
 .member-email { min-width: 0; overflow-wrap: anywhere; }
 @media (max-width: 820px) { .team { grid-template-columns: 1fr; } }
+/* payments */
+.pay-opts { border: 0; padding: 0; margin: 0; display: grid; gap: 8px; }
+.pay-opts legend { padding: 0 0 8px; font-size: 13px; color: var(--muted); }
+.pay-opt { display: flex; align-items: flex-start; gap: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2); cursor: pointer; transition: border-color .15s, background .15s; }
+.pay-opt:has(input:checked) { border-color: var(--orange); background: var(--orange-soft); }
+.pay-opt input { width: 18px; min-height: 18px; height: 18px; margin-top: 3px; padding: 0; accent-color: var(--orange); flex: none; }
+.pay-opt span { display: grid; }
+.pay-opt small { font-size: 13px; }
+.pay-card { display: grid; justify-items: center; gap: 12px; text-align: center; }
+.pay-amount { font: 400 56px/1 var(--display); }
+.qr { width: min(100%, 240px); padding: 10px; background: #fff; border-radius: 12px; }
+.qr svg { display: block; width: 100%; height: auto; }
+.qr p { color: #333; }
+.phone-only { display: none; }
+.upi-copy { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; width: 100%; padding-top: 12px; border-top: 1px solid var(--line); }
+code { font-family: var(--mono); overflow-wrap: anywhere; }
+.pay-line { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.pay-state { padding: 2px 9px; border-radius: 99px; font: 600 12px/20px var(--mono); background: var(--panel-2); }
+.pay-state.awaiting, .pay-state.submitted { color: var(--orange); }
+.pay-state.verified, .pay-state.refunded { color: var(--good); }
+.pay-state.failed, .pay-state.refund_due { color: var(--bad); }
+.pay-box { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2); }
+.inline-link { color: var(--orange); text-decoration: underline; }
+@media (max-width: 820px) { .phone-only { display: inline-flex; } }
+
 /* side menu */
 body { --side-w: 0px; }
 body.has-side { --side-w: 70px; padding-left: var(--side-w); transition: padding-left .28s cubic-bezier(.2, .7, .2, 1); }

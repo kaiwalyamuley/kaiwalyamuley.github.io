@@ -134,7 +134,7 @@ export function consumeLogin() {
 }
 
 /** The full-screen celebration after an order is placed. */
-export function playOrderPlaced({ orderNo, total }) {
+export function playOrderPlaced({ orderNo, total, note = "Pay cash when it arrives. We'll take it from here." }) {
   if (calm) return;
   const colors = ["#ff6a13", "#efe6d6", "#ff9a5a"];
   const drops = Array.from({ length: 34 }, (_, i) => {
@@ -149,7 +149,7 @@ export function playOrderPlaced({ orderNo, total }) {
     <svg class="tick" viewBox="0 0 80 80"><circle cx="40" cy="40" r="34"/><path d="M24 41l11 11 21-24"/></svg>
     <div class="punch-stamp">Order placed</div>
     <div class="punch-card mono"><span>${esc(orderNo)}</span><b>₹${Number(total).toLocaleString("en-IN")}</b></div>
-    <p class="punch-name">Pay cash when it arrives. We'll take it from here.</p>`;
+    <p class="punch-name">${esc(note)}</p>`;
   document.body.append(screen);
   const finish = () => {
     screen.classList.add("out");

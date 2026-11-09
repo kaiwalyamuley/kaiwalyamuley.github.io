@@ -16,7 +16,7 @@ export const CUSTOMER_REASONS = [
 export const OWNER_REASONS = [
   "Plain tee out of stock in this size",
   "Print file not good enough",
-  "Printer unavailable right now",
+  "Payment not received",
   "Customer not reachable",
   "Customer asked to cancel",
   "Delivery not available at this address",

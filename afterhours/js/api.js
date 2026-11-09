@@ -64,9 +64,15 @@ async function liveApi() {
     async saveSettings(values) {
       unwrap(await db.from("store_settings").update({ ...values, updated_at: new Date().toISOString() }).eq("id", 1));
     },
-    async placeOrder(items, address, note) {
-      const rows = unwrap(await db.rpc("place_order", { p_items: items, p_address: address, p_note: note }));
+    async placeOrder(items, address, note, payment) {
+      const rows = unwrap(await db.rpc("place_order", { p_items: items, p_address: address, p_note: note, p_payment: payment }));
       return rows[0];
+    },
+    async submitPaymentRef(orderId, ref) {
+      unwrap(await db.rpc("submit_payment_ref", { p_order_id: orderId, p_ref: ref }));
+    },
+    async paymentAction(orderId, action) {
+      unwrap(await db.rpc("owner_payment_action", { p_order_id: orderId, p_action: action }));
     },
     async myOrders(userId) {
       return unwrap(await db.from("orders").select(orderSelect).eq("user_id", userId).order("created_at", { ascending: false }));

@@ -1,5 +1,5 @@
 import { api } from "./api.js";
-import { esc, money, when, toast, openModal, pickReason, tee, STATUS } from "./ui.js";
+import { esc, money, when, toast, openModal, pickReason, tee, STATUS, PAYMENT, paidLater } from "./ui.js";
 import { OWNER_REASONS } from "./reasons.js";
 import { countUp } from "./motion.js";
 
@@ -25,6 +25,26 @@ let orderTab = "new";
 
 const fileLink = (href, label) => (href ? `<a class="file" href="${esc(href)}" download target="_blank" rel="noopener">${label}</a>` : "");
 
+const canAccept = (order) => ["cod", "verified"].includes(order.payment_status);
+
+function paymentBox(order) {
+  const later = paidLater(order);
+  const methods = { cod: "Cash on delivery", prepaid: "Full UPI payment", advance: "UPI advance" };
+  const actions = {
+    submitted: `<p class="muted small">Check your bank or UPI app for this exact amount and reference before confirming.</p>
+      <div class="row"><button class="btn small primary" data-pay="verify" data-id="${esc(order.id)}">Money received</button><button class="btn small danger" data-pay="fail" data-id="${esc(order.id)}">Not received</button></div>`,
+    refund_due: `<p class="reason-note">Refund ${money(order.amount_due_now)} to this customer, then mark it done.</p>
+      <div class="row"><button class="btn small primary" data-pay="refunded" data-id="${esc(order.id)}">Refund sent</button></div>`,
+  };
+  return `<div class="pay-box">
+    <div class="row-between"><span>${methods[order.payment_method]}</span><span class="pay-state ${esc(order.payment_status)}">${PAYMENT[order.payment_status]}</span></div>
+    ${order.amount_due_now ? `<p class="small">UPI: <strong>${money(order.amount_due_now)}</strong>${order.upi_ref ? ` · Ref <code>${esc(order.upi_ref)}</code>` : ""}</p>` : ""}
+    ${later && !["rejected", "cancelled"].includes(order.status) ? `<p class="small">Collect at delivery: <strong>${money(later)}</strong></p>` : ""}
+    ${actions[order.payment_status] || ""}
+    ${order.status === "pending" && !canAccept(order) ? '<p class="muted small">You can accept this order once the payment is confirmed.</p>' : ""}
+  </div>`;
+}
+
 function orderCard(order) {
   const digits = order.phone.replace(/\D/g, "").slice(-10);
   return `<article class="panel order">
@@ -45,8 +65,9 @@ function orderCard(order) {
       ${order.tracking_no ? `<p class="mono small">Tracking: ${esc(order.tracking_no)}</p>` : ""}
       ${order.cancel_reason ? `<p class="reason-note">${order.status === "cancelled" ? "Customer's reason" : "Declined"}: ${esc(order.cancel_reason)}</p>` : ""}
     </div>
-    <p class="row-between total"><span>Cash on delivery</span><strong>${money(order.total_inr)}</strong></p>
-    <div class="row">${(NEXT[order.status] || []).map(([status, label, kind]) => `<button class="btn small ${kind}" data-order="${esc(order.id)}" data-status="${status}">${label}</button>`).join("")}</div>
+    <p class="row-between total"><span>Total</span><strong>${money(order.total_inr)}</strong></p>
+    ${paymentBox(order)}
+    <div class="row">${(NEXT[order.status] || []).filter(([status]) => status !== "accepted" || canAccept(order)).map(([status, label, kind]) => `<button class="btn small ${kind}" data-order="${esc(order.id)}" data-status="${status}">${label}</button>`).join("")}</div>
   </article>`;
 }
 
@@ -78,6 +99,19 @@ function drawOrders(body, orders, ctx) {
     drawOrders(body, orders, ctx);
   }));
   body.querySelector("#reload").addEventListener("click", ctx.redraw);
+  body.querySelectorAll("[data-pay]").forEach((b) => b.addEventListener("click", async () => {
+    const { pay, id } = b.dataset;
+    const prompts = { fail: "Mark this payment as not received? The customer will be asked to pay again.", verify: "Have you confirmed this money in your bank or UPI app?", refunded: "Have you sent this refund?" };
+    if (!confirm(prompts[pay])) return;
+    try {
+      await api.paymentAction(id, pay);
+      toast("Payment updated");
+      await ctx.refresh();
+      await ctx.redraw();
+    } catch (error) {
+      toast(error.message, "bad");
+    }
+  }));
   body.querySelectorAll("[data-order]").forEach((b) => b.addEventListener("click", async () => {
     const status = b.dataset.status;
     const reason = status === "rejected"
@@ -235,6 +269,14 @@ function drawSettings(body, ctx) {
       <label class="field"><span>Free shipping over (₹)</span><input name="free_shipping_over" type="number" min="0" step="1" required value="${s.free_shipping_over}"></label>
     </div>
     ${text("delivery_note", "Delivery time, shown to customers", "Example: Delivered in 5 to 7 working days")}
+    <h3>Payments</h3>
+    <p class="muted small">Add a UPI ID to offer full and advance UPI payment. Customers will see it, so avoid an ID that contains your personal mobile number.</p>
+    <div class="cols">${text("upi_id", "UPI ID", "yourbrand@okaxis")}${text("upi_payee", "Name shown in UPI apps", "AfterHours")}</div>
+    <div class="cols">
+      <label class="field"><span>Advance amount (₹)</span><input name="advance_inr" type="number" min="1" step="1" required value="${s.advance_inr ?? 99}"></label>
+      <label class="field"><span>Discount for paying in full (%)</span><input name="prepaid_discount_pct" type="number" min="0" max="50" step="1" required value="${s.prepaid_discount_pct ?? 0}"></label>
+    </div>
+    <label class="check"><input type="checkbox" name="cod_enabled" ${s.cod_enabled !== false ? "checked" : ""}><span><strong>Offer full cash on delivery</strong><small class="muted">Turn off to require full or advance UPI payment. Needs a UPI ID.</small></span></label>
     <h3>Helpline</h3>
     <p class="muted small">These appear publicly on the Help page and side menu. Blank items stay hidden.</p>
     <div class="cols">${text("support_phone", "Helpline and WhatsApp number", "10-digit mobile number")}${text("support_email", "Support email", "help@yourbrand.com")}</div>
@@ -259,9 +301,28 @@ function drawSettings(body, ctx) {
       box.hidden = false;
       return;
     }
+    const upi = data.upi_id.trim();
+    if (upi && !/^[A-Za-z0-9._-]+@[A-Za-z0-9.-]+$/.test(upi)) {
+      box.textContent = "Please enter a valid UPI ID, for example yourbrand@okaxis.";
+      box.hidden = false;
+      return;
+    }
+    if (!upi && !data.cod_enabled) {
+      box.textContent = "Keep cash on delivery on until you add a UPI ID, or customers can't order.";
+      box.hidden = false;
+      return;
+    }
     try {
       const values = Object.fromEntries(Object.entries(data).map(([key, value]) => [key, typeof value === "string" ? value.trim() : value]));
-      await api.saveSettings({ ...values, shipping_inr: Number(data.shipping_inr), free_shipping_over: Number(data.free_shipping_over) });
+      await api.saveSettings({
+        ...values,
+        upi_payee: values.upi_payee || "AfterHours",
+        cod_enabled: Boolean(data.cod_enabled),
+        advance_inr: Number(data.advance_inr),
+        prepaid_discount_pct: Number(data.prepaid_discount_pct),
+        shipping_inr: Number(data.shipping_inr),
+        free_shipping_over: Number(data.free_shipping_over),
+      });
       await ctx.refresh();
       await ctx.redraw();
       toast("Store info saved");
