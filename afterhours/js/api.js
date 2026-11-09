@@ -1,5 +1,5 @@
-// One data interface for the app. Live mode talks to Supabase; ?demo=1 on
-// localhost uses a browser-only copy so the flows can be tried without Google.
+// One data interface for the app, backed by Supabase. Local testing can load
+// practice data with ?demo=1, and that code is left out of the published site.
 import { SUPABASE_URL, SUPABASE_KEY } from "./config.js";
 
 const isLocal = ["localhost", "127.0.0.1"].includes(location.hostname);
@@ -35,6 +35,8 @@ async function liveApi() {
       });
     },
     async signIn() {
+      const settings = await (await fetch(`${SUPABASE_URL}/auth/v1/settings`, { headers: { apikey: SUPABASE_KEY } })).json();
+      if (!settings.external?.google) throw new Error("Google sign-in is not switched on yet.");
       unwrap(await db.auth.signInWithOAuth({
         provider: "google",
         options: { redirectTo: location.origin + location.pathname },
@@ -82,80 +84,4 @@ async function liveApi() {
   };
 }
 
-async function demoApi() {
-  const KEY = "afterhours-demo-v1";
-  let state = JSON.parse(localStorage.getItem(KEY) || "null");
-  if (!state) {
-    const seed = await (await fetch("data/products.json")).json();
-    state = {
-      products: seed.map((p, i) => ({ ...p, id: `demo-${i}` })),
-      settings: { shipping_inr: 79, free_shipping_over: 1499 },
-      orders: [],
-      user: null,
-      next: 1001,
-    };
-  }
-  const save = () => localStorage.setItem(KEY, JSON.stringify(state));
-  const people = {
-    customer: { id: "demo-customer", email: "customer@demo.local", full_name: "Demo Customer", role: "customer" },
-    owner: { id: "demo-owner", email: "owner@demo.local", full_name: "Demo Owner", role: "owner" },
-  };
-  let authHandler = () => {};
-  const flow = { pending: ["accepted", "rejected"], accepted: ["printing", "rejected"], printing: ["dispatched"], dispatched: ["delivered"] };
-
-  return {
-    currentProfile: async () => (state.user ? people[state.user] : null),
-    onAuthChange: (handler) => { authHandler = handler; },
-    async signIn(role = "customer") { state.user = role; save(); authHandler(); },
-    async signOut() { state.user = null; save(); authHandler(); },
-    products: async () => [...state.products].sort((a, b) => a.sort - b.sort),
-    settings: async () => state.settings,
-    async saveSettings(values) { Object.assign(state.settings, values); save(); },
-    async placeOrder(items, address, note) {
-      const lines = items.map((item) => {
-        const p = state.products.find((x) => x.id === item.product_id);
-        if (!p || p.status !== "live") throw new Error("An item in your bag is no longer available");
-        return { id: crypto.randomUUID(), product_id: p.id, name: p.name, size: item.size, quantity: item.quantity, unit_price_inr: p.price_inr,
-          print_front: p.print_front, print_back: p.print_back, print_file_front: p.print_file_front, print_file_back: p.print_file_back };
-      });
-      const subtotal = lines.reduce((sum, l) => sum + l.quantity * l.unit_price_inr, 0);
-      const shipping = subtotal >= state.settings.free_shipping_over ? 0 : state.settings.shipping_inr;
-      const order = { id: crypto.randomUUID(), order_no: `AH-${state.next++}`, user_id: state.user === "owner" ? people.owner.id : people.customer.id,
-        status: "pending", customer_name: address.name, phone: address.phone, address_line: address.line, city: address.city, state: address.state,
-        pincode: address.pincode, customer_note: note, owner_note: "", tracking_no: "", payment_method: "cod", subtotal_inr: subtotal, shipping_inr: shipping,
-        total_inr: subtotal + shipping, created_at: new Date().toISOString(), order_items: lines };
-      state.orders.unshift(order);
-      save();
-      return { order_id: order.id, order_no: order.order_no, total_inr: order.total_inr };
-    },
-    myOrders: async (userId) => state.orders.filter((o) => o.user_id === userId),
-    async cancelOrder(id) {
-      const order = state.orders.find((o) => o.id === id);
-      if (order?.status !== "pending") throw new Error("This order can no longer be cancelled");
-      order.status = "cancelled";
-      save();
-    },
-    allOrders: async () => state.orders,
-    async updateOrder(id, status, tracking, note) {
-      const order = state.orders.find((o) => o.id === id);
-      if (!flow[order.status]?.includes(status)) throw new Error(`An order that is ${order.status} cannot move to ${status}`);
-      order.status = status;
-      if (tracking) order.tracking_no = tracking;
-      if (note != null) order.owner_note = note;
-      save();
-    },
-    async saveProduct(product) {
-      if (product.id) Object.assign(state.products.find((p) => p.id === product.id), product);
-      else state.products.push({ ...product, id: crypto.randomUUID() });
-      save();
-    },
-    upload: (file) => new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = () => reject(new Error("Could not read that file"));
-      reader.readAsDataURL(file);
-    }),
-  };
-}
-
-export const api = DEMO ? await demoApi() : await liveApi();
+export const api = DEMO ? await (await import("./demo.js")).demoApi() : await liveApi();

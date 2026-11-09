@@ -1,10 +1,10 @@
 import { api, DEMO } from "./api.js";
 import { INSTAGRAM_URL } from "./config.js";
-import { esc, money, when, toast, openModal, tee, STATUS } from "./ui.js";
-import { renderOwner, pendingCount } from "./owner.js";
+import { esc, money, when, toast, openModal, tee, STATUS, GOOGLE_ICON } from "./ui.js";
+import { pageSwap, reveal, bindTilt, flyToBag, markLogin, consumeLogin, playLogin } from "./motion.js";
 
 const app = document.getElementById("app");
-const store = { profile: null, products: [], settings: { shipping_inr: 79, free_shipping_over: 1499 }, ownerPending: 0 };
+const store = { profile: null, products: [], settings: { shipping_inr: 79, free_shipping_over: 1499 } };
 const INDIAN_MOBILE = /^[6-9][0-9]{9}$/;
 
 /* ---------- bag ---------- */
@@ -38,27 +38,29 @@ function totals(lines) {
 
 /* ---------- sign in ---------- */
 function signInModal(reason = "Sign in to place orders and track them.") {
-  const buttons = DEMO
-    ? `<button class="btn primary wide" data-role="customer">Enter as demo customer</button>
-       <button class="btn wide" data-role="owner">Enter as demo owner</button>`
-    : `<button class="btn google wide" data-role="google">${GOOGLE_ICON} Continue with Google</button>`;
-  openModal(`<img class="modal-logo" src="assets/brand/logo-small.webp" alt="AfterHours">
-    <h2>Clock in</h2><p class="muted">${esc(reason)}</p><div class="stack">${buttons}</div>`, (modal, close) => {
-    modal.querySelectorAll("[data-role]").forEach((button) => button.addEventListener("click", async () => {
+  const label = DEMO ? "Enter practice store" : `${GOOGLE_ICON} Continue with Google`;
+  openModal(`<img class="modal-logo spray" src="assets/brand/logo-small.webp" alt="AfterHours">
+    <h2 class="clock-title">Clock in</h2><p class="muted">${esc(reason)}</p>
+    <button class="btn google wide shine" id="google-signin">${label}</button>`, (modal, close) => {
+    const button = modal.querySelector("#google-signin");
+    button.addEventListener("click", async () => {
+      markLogin();
+      button.disabled = true;
+      button.classList.add("working");
       try {
-        await api.signIn(button.dataset.role);
-        close();
+        await api.signIn("customer");
+        if (DEMO) close();
       } catch (error) {
+        consumeLogin();
         toast(error.message, "bad");
+        button.disabled = false;
+        button.classList.remove("working");
       }
-    }));
+    });
   });
 }
 
-const GOOGLE_ICON = `<svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.7 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.4 13.7 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.2 5.5-4.7 7.2l7.6 5.9c4.4-4.1 6.9-10.1 6.9-17.6z"/><path fill="#FBBC05" d="M10.5 28.7A14.5 14.5 0 0 1 9.7 24c0-1.6.3-3.2.8-4.7l-7.9-6.1A24 24 0 0 0 0 24c0 3.9.9 7.5 2.6 10.8l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.6-5.9c-2.1 1.4-4.9 2.3-8.3 2.3-6.3 0-11.6-4.2-13.5-9.9l-7.9 6.1C6.5 42.6 14.6 48 24 48z"/></svg>`;
-
 const firstName = () => (store.profile?.full_name || store.profile?.email || "there").split(/[\s@]/)[0];
-const isOwner = () => store.profile?.role === "owner";
 
 /* ---------- shell ---------- */
 function drawNav() {
@@ -68,7 +70,6 @@ function drawNav() {
     <div class="links">
       <a href="#/shop">Shop</a>
       ${signedIn ? '<a href="#/orders">Orders</a>' : ""}
-      ${isOwner() ? `<a class="owner-link" href="#/owner">Console${store.ownerPending ? `<b class="pill">${store.ownerPending}</b>` : ""}</a>` : ""}
       <a class="bag-link" href="#/bag">Bag<b class="pill">${bagCount()}</b></a>
       ${signedIn
         ? `<button class="link" id="sign-out">Sign out</button>`
@@ -156,14 +157,11 @@ function hero() {
   const copy = !store.profile
     ? { kicker: "Streetwear for the late shift", title: "Made for<br><span>after dark.</span>", body: "Graphic tees printed the moment you order. No warehouse, no leftovers.",
         cta: `<button class="btn primary" id="hero-signin">Sign in to order</button><a class="btn" href="#/shop">Browse the drop</a>` }
-    : isOwner()
-      ? { kicker: "Owner access", title: `On shift,<br><span>${esc(firstName())}.</span>`, body: store.ownerPending ? `${store.ownerPending} order${store.ownerPending === 1 ? " is" : "s are"} waiting for you.` : "No orders are waiting right now.",
-          cta: `<a class="btn primary" href="#/owner">Open console</a><a class="btn" href="#/owner/products">Edit products</a>` }
-      : { kicker: "You're clocked in", title: `Welcome back,<br><span>${esc(firstName())}.</span>`, body: "The latest drop is below, and your orders are one tap away.",
-          cta: `<a class="btn primary" href="#/shop">Shop the drop</a><a class="btn" href="#/orders">Track orders</a>` };
+    : { kicker: "You're clocked in", title: `Welcome back,<br><span>${esc(firstName())}.</span>`, body: "The latest drop is below, and your orders are one tap away.",
+        cta: `<a class="btn primary" href="#/shop">Shop the drop</a><a class="btn" href="#/orders">Track orders</a>` };
   return `<section class="hero">
     <div class="hero-copy">
-      <img class="hero-logo" src="assets/brand/logo.webp" alt="AfterHours Streetwear Co.">
+      <img class="hero-logo spray" src="assets/brand/logo.webp" alt="AfterHours Streetwear Co.">
       <span class="mono kicker">${copy.kicker}</span>
       <h1>${copy.title}</h1>
       <p class="lead">${copy.body}</p>
@@ -171,14 +169,14 @@ function hero() {
     </div>
     <div class="hero-art">
       <div class="hud mono"><span>REC ●</span><span>${visible().length} GRAPHICS LIVE</span></div>
-      ${pick ? tee(pick, "back") : ""}
+      <div class="float"><div class="scan" aria-hidden="true"></div>${pick ? tee(pick, "back", true) : ""}</div>
       ${pick ? `<a class="hud-tag" href="#/p/${esc(pick.slug)}"><b>${esc(pick.name)}</b><span>${money(pick.price_inr)}</span></a>` : ""}
     </div>
   </section>`;
 }
 
 async function activeOrderStrip() {
-  if (!store.profile || isOwner()) return "";
+  if (!store.profile) return "";
   const orders = await api.myOrders(store.profile.id);
   const active = orders.find((o) => ["pending", "accepted", "printing", "dispatched"].includes(o.status));
   if (!active) return "";
@@ -210,6 +208,7 @@ function pageShop(filter = "All") {
     ${grid(items)}
   </section>`;
   app.querySelectorAll("[data-c]").forEach((b) => b.addEventListener("click", () => pageShop(b.dataset.c)));
+  reveal(app);
 }
 
 function pageProduct(slug) {
@@ -241,14 +240,18 @@ function pageProduct(slug) {
     app.querySelectorAll("[data-v]").forEach((x) => x.classList.toggle("on", x === b));
     stage.innerHTML = b.dataset.v === "model"
       ? `<img class="model" src="${esc(p.model_image)}" alt="${esc(p.name)} worn by a model">`
-      : tee(p, b.dataset.v);
+      : tee(p, b.dataset.v, true);
+    stage.firstElementChild.classList.add("swap-in");
   }));
   let size = p.sizes[1] || p.sizes[0];
   app.querySelectorAll("[data-s]").forEach((b) => b.addEventListener("click", () => {
     size = b.dataset.s;
     app.querySelectorAll("[data-s]").forEach((x) => x.classList.toggle("on", x === b));
   }));
-  document.getElementById("add")?.addEventListener("click", () => addToBag(p.id, size));
+  document.getElementById("add")?.addEventListener("click", () => {
+    addToBag(p.id, size);
+    flyToBag(stage.firstElementChild);
+  });
   document.getElementById("buy")?.addEventListener("click", () => { addToBag(p.id, size); location.hash = "#/checkout"; });
 }
 
@@ -391,27 +394,29 @@ function notFound() {
 /* ---------- router ---------- */
 async function route() {
   const [, page = "", arg = ""] = (location.hash || "#/").split("/");
-  window.scrollTo(0, 0);
-  try {
-    if (page === "") await pageHome();
-    else if (page === "shop") pageShop();
-    else if (page === "p") pageProduct(arg);
-    else if (page === "bag") pageBag();
-    else if (page === "checkout") await pageCheckout();
-    else if (page === "orders") await pageOrders();
-    else if (page === "owner") {
-      if (!isOwner()) return notFound();
-      await renderOwner(app, arg, { store, refresh, redraw: route });
-    } else notFound();
-  } catch (error) {
-    app.innerHTML = `<section class="section first empty"><h2>Something went wrong.</h2><p class="muted">${esc(error.message)}</p></section>`;
-  }
+  await pageSwap(app, async () => {
+    window.scrollTo({ top: 0, behavior: "instant" });
+    try {
+      if (page === "") await pageHome();
+      else if (page === "shop") pageShop();
+      else if (page === "p") pageProduct(arg);
+      else if (page === "bag") pageBag();
+      else if (page === "checkout") await pageCheckout();
+      else if (page === "orders") await pageOrders();
+      else notFound();
+    } catch (error) {
+      app.innerHTML = `<section class="section first empty"><h2>Something went wrong.</h2><p class="muted">${esc(error.message)}</p></section>`;
+    }
+  });
   drawNav();
 }
 
 async function refresh() {
   [store.products, store.settings] = await Promise.all([api.products(), api.settings()]);
-  store.ownerPending = isOwner() ? await pendingCount() : 0;
+}
+
+function welcome() {
+  if (consumeLogin() && store.profile) playLogin({ name: firstName() });
 }
 
 async function boot() {
@@ -419,12 +424,15 @@ async function boot() {
   store.profile = await api.currentProfile();
   await refresh();
   drawFooter();
+  bindTilt(app);
   api.onAuthChange(async () => {
     store.profile = await api.currentProfile();
+    welcome();
     await refresh();
     route();
   });
   window.addEventListener("hashchange", route);
+  welcome();
   await route();
 }
 

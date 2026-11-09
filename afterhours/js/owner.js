@@ -1,5 +1,6 @@
 import { api } from "./api.js";
 import { esc, money, when, toast, openModal, tee, STATUS } from "./ui.js";
+import { countUp } from "./motion.js";
 
 export async function pendingCount() {
   const orders = await api.allOrders();
@@ -96,9 +97,9 @@ function stats(orders) {
     ["Waiting", orders.filter((o) => o.status === "pending").length],
     ["In production", orders.filter((o) => ["accepted", "printing"].includes(o.status)).length],
     ["Orders", counted.length],
-    ["Order value", money(counted.reduce((sum, o) => sum + o.total_inr, 0))],
+    ["Order value", counted.reduce((sum, o) => sum + o.total_inr, 0), true],
   ];
-  return `<div class="stats">${tiles.map(([label, value]) => `<div class="stat"><span class="mono muted">${label}</span><strong>${value}</strong></div>`).join("")}</div>`;
+  return `<div class="stats">${tiles.map(([label, value, isMoney]) => `<div class="stat"><span class="mono muted">${label}</span><strong data-n="${value}" ${isMoney ? 'data-money="1"' : ""}>${isMoney ? money(value) : value}</strong></div>`).join("")}</div>`;
 }
 
 const slugify = (text) => text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -236,9 +237,10 @@ export async function renderOwner(app, tab, ctx) {
   app.innerHTML = `<section class="section first">
     <div class="head"><span class="mono kicker">Owner console</span><h2>Run the shop</h2></div>
     ${stats(orders)}
-    <div class="tabs">${tabs.map(([key, label]) => `<a class="${key === active ? "on" : ""}" href="#/owner/${key}">${label}</a>`).join("")}</div>
+    <div class="tabs">${tabs.map(([key, label]) => `<a class="${key === active ? "on" : ""}" href="#/${key}">${label}</a>`).join("")}</div>
     <div id="owner-body"></div>
   </section>`;
+  countUp(app);
   const body = document.getElementById("owner-body");
   if (active === "products") drawProducts(body, ctx);
   else if (active === "settings") drawSettings(body, ctx);
