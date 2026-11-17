@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SupeRR Pressure Selector</title>
+<meta name="description" content="Who delivers when it matters? A ball-by-ball pressure rating for IPL and T20I players, 2022 to 2026. Built for SupeRR Selector Season 2, Round 1.">
+<meta property="og:title" content="SupeRR Pressure Selector">
+<meta property="og:description" content="The most reliable batters and bowlers under pressure, rated ball by ball from 190,152 deliveries.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23E21982'/%3E%3Cpath d='M18 40 L28 28 L36 34 L46 20' stroke='white' stroke-width='6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <span class="dot"></span>
+    <div><strong>SupeRR Pressure Selector</strong><small>Season 2 &middot; Round 1</small></div>
+  </div>
+  <nav id="tabs" aria-label="Sections">
+    <a href="#overview">Overview</a>
+    <a href="#rankings">Rankings</a>
+    <a href="#scout">Scouting</a>
+    <a href="#compare">Compare</a>
+    <a href="#replay">Match Replay</a>
+    <a href="#method">Method</a>
+    <a href="#glossary">Glossary</a>
+  </nav>
+</header>
+
+<main>
+  <div id="loading" class="loading">Loading the data&hellip;</div>
+
+  <!-- OVERVIEW -->
+  <section id="overview" class="view">
+    <div class="hero">
+      <div>
+        <p class="eyebrow">IPL and men's T20 internationals, 2022 to 2026</p>
+        <h1>Who delivers when it matters?</h1>
+        <p class="lead">Every ball gets a Pressure Index from the match situation before it is bowled. Players are then rated on how much value they add above what is expected in the same situation, on the balls that decide matches.</p>
+      </div>
+      <div class="kpis" id="kpis"></div>
+    </div>
+
+    <div class="grid two">
+      <article class="card">
+        <h2>Top 10 batters under pressure</h2>
+        <p class="sub">Pure pressure ranking, as submitted. The line shows the 90% range of ranks when the data is resampled.</p>
+        <div id="ub" class="rank-list"></div>
+      </article>
+      <article class="card">
+        <h2>Top 10 bowlers under pressure</h2>
+        <p class="sub">Pure pressure ranking, as submitted. The line shows the 90% range of ranks when the data is resampled.</p>
+        <div id="uw" class="rank-list"></div>
+      </article>
+    </div>
+
+    <article class="card">
+      <h2>Rajasthan Royals investment list</h2>
+      <p class="sub">Final Score = 85% Potential Score + 15% fit with RR's measured gaps. No more than 4 overseas players and 3 per role. Select a player to open the scouting report.</p>
+      <div class="table-wrap"><table id="final" class="tbl click"></table></div>
+    </article>
+
+    <div class="grid three">
+      <article class="card note"><h3>Biggest stakes</h3><p id="f1"></p></article>
+      <article class="card note"><h3>RR's clearest gap</h3><p id="f2"></p></article>
+      <article class="card note"><h3>How far to trust it</h3><p id="f3"></p></article>
+    </div>
+  </section>
+
+  <!-- RANKINGS -->
+  <section id="rankings" class="view">
+    <div class="head">
+      <h1>All rated players</h1>
+      <p class="lead">Ratings run from 0 to 100, and 50 is the average eligible player. Value is runs above expected per 100 balls in the same situation, so positive is good for batters and bowlers alike.</p>
+    </div>
+    <div class="controls">
+      <div class="seg" id="discSeg"><button data-d="batting" class="on">Batting</button><button data-d="bowling">Bowling</button></div>
+      <input id="rkSearch" type="search" placeholder="Search a player" aria-label="Search a player">
+      <select id="rkRole" aria-label="Filter by role"></select>
+    </div>
+    <article class="card flush">
+      <div class="table-wrap"><table id="rk" class="tbl sortable"></table></div>
+    </article>
+  </section>
+
+  <!-- SCOUTING -->
+  <section id="scout" class="view">
+    <div class="head">
+      <h1>Scouting reports</h1>
+      <p class="lead">The 20 shortlisted players: best Final Scores among players active since January 2025.</p>
+    </div>
+    <div class="pills" id="scoutPills"></div>
+    <article class="card profile" id="scoutHead"></article>
+    <div class="grid three" id="scoutText"></div>
+    <div class="grid three">
+      <article class="card"><h2>How the rating is built</h2><p class="sub">Start at 50, then each part adds or subtracts points</p><div class="cv"><canvas id="cWater"></canvas></div></article>
+      <article class="card"><h2>Percentile among rated players</h2><p class="sub">Share of rated players in the same discipline this player beats</p><div class="cv"><canvas id="cSkill"></canvas></div></article>
+      <article class="card"><h2>What drives the Potential Score</h2><p class="sub">Points from each part of the 0 to 100 Potential Score</p><div class="cv"><canvas id="cPot"></canvas></div></article>
+    </div>
+  </section>
+
+  <!-- COMPARE -->
+  <section id="compare" class="view">
+    <div class="head">
+      <h1>Compare two players</h1>
+      <p class="lead">Choose any two of the 182 rated players. Percentile shows the share of rated players in the same discipline that the player beats. 100 is best.</p>
+    </div>
+    <div class="grid two">
+      <label class="pick a">Player A<input id="cmpA" list="plist" autocomplete="off"></label>
+      <label class="pick b">Player B<input id="cmpB" list="plist" autocomplete="off"></label>
+    </div>
+    <datalist id="plist"></datalist>
+    <article class="card flush"><div class="table-wrap"><table id="cmpT" class="tbl"></table></div></article>
+    <article class="card"><h2>Skill percentiles</h2><div class="cv tall"><canvas id="cCmp"></canvas></div></article>
+  </section>
+
+  <!-- REPLAY -->
+  <section id="replay" class="view">
+    <div class="head">
+      <h1>Match replay</h1>
+      <p class="lead">Watch win chance and pressure move ball by ball in any of the 801 analysed matches. Spikes in the lower chart are the moments that decided the game.</p>
+    </div>
+    <div class="controls">
+      <input id="mSearch" type="search" placeholder="Filter matches: team, competition or year" aria-label="Filter matches">
+      <select id="mSel" aria-label="Choose a match"></select>
+    </div>
+    <div class="kpis small" id="mKpi"></div>
+    <div class="grid replay">
+      <div class="stack">
+        <article class="card"><h2 id="mTitle">Win chance</h2><p class="sub">Above 50 the side batting first is ahead. The chase starts about halfway across.</p><div class="cv"><canvas id="cWin"></canvas></div></article>
+        <article class="card"><h2>Pressure Index, ball by ball</h2><p class="sub"><span class="key ord"></span>Ordinary <span class="key high"></span>High <span class="key ext"></span>Extreme</p><div class="cv"><canvas id="cPress"></canvas></div></article>
+      </div>
+      <article class="card"><h2>Biggest turning points</h2><p class="sub">Win chance swing in percentage points</p><ol id="mTurn" class="turns"></ol></article>
+    </div>
+  </section>
+
+  <!-- METHOD -->
+  <section id="method" class="view">
+    <div class="head">
+      <h1>How it works</h1>
+      <p class="lead">One real ball, from the scoreboard to its Pressure Index, then from Pressure Index to player rating.</p>
+    </div>
+    <ol class="steps">
+      <li><b>Scoreboard</b><span>Runs needed, balls left, wickets in hand</span></li>
+      <li><b>Win chance</b><span>A model estimates who is winning before each ball</span></li>
+      <li><b>Stakes</b><span>How far could the next ball swing the match?</span></li>
+      <li><b>Pressure Index</b><span>Stakes, closeness, stage and momentum, 0 to 100</span></li>
+      <li><b>Rating</b><span>Value above expected on pressure balls, fairly adjusted</span></li>
+    </ol>
+    <div class="grid three">
+      <article class="card" id="wkBall"></article>
+      <article class="card"><h2>What could the next ball do?</h2><p class="sub" id="wkSub"></p><div class="cv"><canvas id="cOut"></canvas></div></article>
+      <article class="card"><h2>Add the ingredients</h2><p class="sub" id="wkTot"></p><div class="table-wrap"><table id="wkIdx" class="tbl"></table></div><p class="small-note">Balls in effectively decided games (win chance below 3% or above 97%) are never pressure. Among live balls, the top 10% are Extreme and the next 20% are High.</p></article>
+    </div>
+    <div class="grid two">
+      <article class="card"><h2>Bigger stakes in higher bands</h2><p class="sub">Average win-probability change per ball (points)</p><div class="cv"><canvas id="cSwing"></canvas></div></article>
+      <article class="card"><h2>Pressure builds through the innings</h2><p class="sub">Share of balls in each band</p><div class="cv"><canvas id="cPhase"></canvas></div></article>
+    </div>
+    <article class="card">
+      <h2>The rating, step by step</h2>
+      <div class="grid three inner">
+        <div><h3>1. Compare with the situation</h3><p>Each ball's value is runs scored minus the cost of a wicket, compared with the average in the same competition, innings, phase, wickets lost and pressure state.</p></div>
+        <div><h3>2. Weigh it fairly</h3><p>Older balls and weaker opposition count for less. Small samples are pulled toward what the player's ordinary form predicts, so a hot streak cannot top the list alone.</p></div>
+        <div><h3>3. Blend five parts</h3><p>Rating = 40% pressure value, 20% uplift over own level, 15% win impact, 15% consistency, 10% extreme-pressure value. Scaled so 50 is average.</p></div>
+      </div>
+      <p class="small-note">Eligibility: at least 100 pressure balls for batters or 120 for bowlers, 15 pressure innings or spells, 150 ordinary balls, and pressure balls in at least 2 calendar years.</p>
+    </article>
+    <div class="grid two">
+      <article class="card"><h2>RR against the rest of the IPL, 2025-26</h2><p class="sub">RR value per 100 pressure balls minus the rest of the IPL. Below zero is a weakness.</p><div class="cv"><canvas id="cGap"></canvas></div></article>
+      <article class="card"><h2>How reliable is each signal?</h2><p class="sub">Split-half reliability: 0 means no agreement between halves of the data, 1 is perfect</p><div class="cv"><canvas id="cRel"></canvas></div></article>
+    </div>
+    <div class="grid two">
+      <article class="card"><h2>Robustness</h2><p class="sub">How many of the top 10 survive under other assumptions</p><div class="table-wrap"><table id="scen" class="tbl"></table></div></article>
+      <article class="card"><h2>Data cleaning log</h2><p class="sub">Every issue found in the raw files and how it was handled</p><div class="table-wrap"><table id="dq" class="tbl"></table></div></article>
+    </div>
+  </section>
+
+  <!-- GLOSSARY -->
+  <section id="glossary" class="view">
+    <div class="head">
+      <h1>Glossary</h1>
+      <p class="lead">Every term used on this site, in plain English, with a real worked example.</p>
+    </div>
+    <div class="controls">
+      <input id="gSearch" type="search" placeholder="Search a term" aria-label="Search a term">
+      <select id="gGroup" aria-label="Filter by topic"></select>
+    </div>
+    <div id="gList" class="gloss"></div>
+  </section>
+</main>
+
+<footer>
+  <p><a href="files/Methodology-Report.pdf" download>Methodology report (PDF)</a> &middot; <a href="files/Power-BI-Report.pdf" download>Full Power BI report (PDF)</a></p>
+  <p class="muted">Independent analysis for SupeRR Selector Season 2. Not an official Rajasthan Royals publication. Every number comes from the supplied ball-by-ball files: no reputation, external ratings or outside player information were used to order the lists.</p>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
