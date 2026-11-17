@@ -195,3 +195,6 @@ footer p { margin: 6px 0; }
   .card { padding: 16px; }
   .textcard h3 { margin: -16px -16px 12px; padding: 9px 16px; }
 }
+
+footer .by { font-size: 14.5px; color: var(--ink); }
+footer .by strong { color: var(--navy); }
